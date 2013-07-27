@@ -19,6 +19,7 @@ import org.cocos2d.nodes.CCTextureCache;
 import org.cocos2d.sound.SoundEngine;
 import org.cocos2d.types.CGPoint;
 import org.cocos2d.types.CGRect;
+import org.cocos2d.types.CGSize;
 import org.cocos2d.types.ccColor3B;
 
 import android.content.Context;
@@ -31,6 +32,7 @@ import com.nazzaritech.marsdefence.vo.Bullet;
 import com.nazzaritech.marsdefence.vo.BulletType;
 import com.nazzaritech.marsdefence.vo.Monster;
 import com.nazzaritech.marsdefence.vo.MonsterType;
+import com.nazzaritech.marsdefence.vo.ScreenObject;
 import com.nazzaritech.marsdefence.vo.TagTypes;
 import com.nazzaritech.marsdefence.vo.Trooper;
 import com.nazzaritech.marsdefence.vo.TrooperType;
@@ -54,16 +56,18 @@ public abstract class StageLayer extends CCLayer {
 	private float locationTouchMoveYStart = 0;
 	private boolean isTouchInMovement = false;
 	private boolean isTouchInMovementStart = false;
+	private boolean enterMoveMethod = false;
     Context _context;
 
-    protected CCSprite bar_gold;
-    protected CCSprite bar_silver;
+    // Objetos de Tela
+    protected ScreenObject _goldBar;
+    protected ScreenObject _silverBar;
 
-	protected float minPositionXCenter = 0;
-	protected float maxPositionXCenter = 0;
+	private float minPositionXCenter = 0;
+	private float maxPositionXCenter = 0;
 		
-	protected float minPositionYCenter = 0;
-	protected float maxPositionYCenter = 0;
+	private float minPositionYCenter = 0;
+	private float maxPositionYCenter = 0;
 
 
 	// DEBUG
@@ -115,8 +119,32 @@ public abstract class StageLayer extends CCLayer {
 	 */
 	protected StageLayer() {
 		super();
-        bar_gold = CCSprite.sprite("bar_goldcoin.png");
-        bar_silver = CCSprite.sprite("bar_silvercoin.png");
+		setContentSize(stageSize());
+
+		this.minPositionXCenter = - (getContentSize().width - ScreemUtil.widthScreem());
+		this.maxPositionXCenter = 0;
+
+		this.minPositionYCenter = - (getContentSize().height - ScreemUtil.heightScreem());
+		this.maxPositionYCenter = 0;
+
+	    CCSprite background = CCSprite.sprite(stageBackgrounImage());
+	    background.setPosition(getContentSize().width / 2f, getContentSize().height/ 2f);
+	    background.setVertexZ(1);
+	    addChild(background);
+
+		_goldBar = new ScreenObject();
+		_goldBar.setSprite(CCSprite.sprite("bar_goldcoin.png"));
+	    _goldBar.setStartPosition(CGPoint.ccp(100,ScreemUtil.heightScreem() - 40));
+	    _goldBar.getSprite().setPosition(CGPoint.ccp(100,ScreemUtil.heightScreem() - 40));
+	    _goldBar.getSprite().setVertexZ(1);
+	    addChild(_goldBar.getSprite());
+
+		_silverBar = new ScreenObject();
+		_silverBar.setSprite(CCSprite.sprite("bar_silvercoin.png"));
+	    _silverBar.setStartPosition(CGPoint.ccp(240,ScreemUtil.heightScreem() - 40));
+	    _silverBar.getSprite().setPosition(CGPoint.ccp(240,ScreemUtil.heightScreem() - 40));
+	    _silverBar.getSprite().setVertexZ(1);
+	    addChild(_silverBar.getSprite());
 
 		this._context = CCDirector.sharedDirector().getActivity();
 
@@ -597,6 +625,13 @@ public abstract class StageLayer extends CCLayer {
 	@Override
 	public boolean ccTouchesMoved(MotionEvent event) {
 		
+		// se estiver processando, nao prossegue ate acabar
+		if (enterMoveMethod) {
+			return false;
+		}
+		
+		enterMoveMethod = true;
+		
 		// Na primeira vez, sempre grava
 		if (!isTouchInMovementStart) {
 			locationTouchMoveXStart = event.getX();
@@ -622,43 +657,70 @@ public abstract class StageLayer extends CCLayer {
 			
 		}
 
-		changeToNewPosition(event.getX(), event.getY());
+		changeToNewPositionScreen(event.getX(), event.getY());
 
 		locationTouchMoveX = event.getX();
 		locationTouchMoveY = event.getY();
 
-		return super.ccTouchesMoved(event);
+		enterMoveMethod = false;
+
+		return true;
 	}
 
-	private synchronized void changeToNewPosition(float x, float y) {
-
+	private void changeToNewPositionScreen(float x, float y) {
+		
 		float distanceMovedX = (x - locationTouchMoveX)/3f;
 		float distanceMovedY = (locationTouchMoveY - y)/3f;
 		
 		float newPositionX = getPosition().x + distanceMovedX;
 		float newPositionY = getPosition().y + distanceMovedY;
 
+		changeToNewPosition(_goldBar,x, y,newPositionX, newPositionY);
+		changeToNewPosition(_silverBar,x, y,newPositionX, newPositionY);
+
 		if (newPositionY < minPositionYCenter) {
 			newPositionY = minPositionYCenter;
-			distanceMovedY = 0;
 		} else if (newPositionY > maxPositionYCenter) {
 			newPositionY = maxPositionYCenter;
-			distanceMovedY = 0;
 		}
 
 		if (newPositionX < minPositionXCenter) {
 			newPositionX = minPositionXCenter;
-			distanceMovedX = 0;
 		} else if (newPositionX > maxPositionXCenter) {
 			newPositionX = maxPositionXCenter;
-			distanceMovedX = 0;
 		}
 
 		setPosition(newPositionX, newPositionY);
 
-		bar_gold.setPosition(bar_gold.getPosition().x - distanceMovedX, bar_gold.getPosition().y - distanceMovedY);
-		bar_silver.setPosition(bar_silver.getPosition().x - distanceMovedX, bar_silver.getPosition().y - distanceMovedY);
 	}
 
+	private void changeToNewPosition(ScreenObject screenObject, float x, float y, 
+			float newPositionX, float newPositionY) {
+		
+		float distanceMovedX = (x - locationTouchMoveX)/3f;
+		float distanceMovedY = (locationTouchMoveY - y)/3f;
+		
+		float newPositionXScreen = screenObject.getSprite().getPosition().x - distanceMovedX;
+		float newPositionYScreen = screenObject.getSprite().getPosition().y - distanceMovedY;
+
+		if (newPositionY < minPositionYCenter) {
+			newPositionYScreen = screenObject.getStartPosition().y - minPositionYCenter;
+		} else if (newPositionY > maxPositionYCenter) {
+			newPositionYScreen = screenObject.getStartPosition().y;
+		}
+
+		if (newPositionX < minPositionXCenter) {
+			newPositionXScreen = screenObject.getStartPosition().x - minPositionXCenter;
+		} else if (newPositionX > maxPositionXCenter) {
+			newPositionXScreen = screenObject.getStartPosition().x;
+		}
+
+		screenObject.getSprite().setPosition(newPositionXScreen, newPositionYScreen);
+
+	}
+	
+	protected abstract CGSize stageSize();
+
+	protected abstract String stageBackgrounImage();
 }
 

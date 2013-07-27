@@ -8,6 +8,7 @@ import org.cocos2d.nodes.CCDirector;
 import org.cocos2d.nodes.CCLabel;
 import org.cocos2d.nodes.CCSprite;
 import org.cocos2d.types.CGPoint;
+import org.cocos2d.types.CGSize;
 import org.cocos2d.types.ccColor3B;
 
 import android.util.SparseArray;
@@ -22,28 +23,6 @@ public class StageOne extends StageLayer {
 
 	protected StageOne() {
 	    super();
-
-		// Seta tamanho da fase um
-		setContentSize(1000, 600);
-
-		this.minPositionXCenter = - (getContentSize().width - ScreemUtil.widthScreem());
-		this.maxPositionXCenter = 0;
-
-		this.minPositionYCenter = - (getContentSize().height - ScreemUtil.heightScreem());
-		this.maxPositionYCenter = 0;
-
-	    CCSprite background = CCSprite.sprite("bg_stage2.png");
-	    background.setPosition(getContentSize().width / 2f, getContentSize().height/ 2f);
-	    background.setVertexZ(1);
-	    addChild(background);
-
-	    bar_gold.setPosition(100,ScreemUtil.heightScreem() - 40);
-	    bar_gold.setVertexZ(1);
-	    addChild(bar_gold);
-
-	    bar_silver.setPosition(240,ScreemUtil.heightScreem() - 40);
-	    bar_silver.setVertexZ(1);
-	    addChild(bar_silver);
 
 		// Pontuacao monstros destruidos
 //		_ptMonstrosDestruidos = CCLabel.makeLabel("Destruidos: 00/90", "DroidSans", 32);
@@ -283,6 +262,22 @@ public class StageOne extends StageLayer {
 	    CCSprite monsterLive = (CCSprite) sender;
 	    removeChild(monsterLive, true);
 		
+	}
+
+	/**
+	 * SETA TAMANHO DA TELA
+	 */
+	@Override
+	protected CGSize stageSize() {
+		return CGSize.make(1000, 600);
+	}
+
+	/**
+	 * SETA IMAGEN DA FASE
+	 */
+	@Override
+	protected String stageBackgrounImage() {
+		return "bg_stage2.png";
 	}
 }
 
