@@ -115,6 +115,9 @@ public abstract class StageLayer extends CCLayer {
 	 */
 	protected StageLayer() {
 		super();
+        bar_gold = CCSprite.sprite("bar_goldcoin.png");
+        bar_silver = CCSprite.sprite("bar_silvercoin.png");
+
 		this._context = CCDirector.sharedDirector().getActivity();
 
 		SoundEngine.sharedEngine().preloadEffect(_context, R.raw.tshot);
@@ -160,9 +163,6 @@ public abstract class StageLayer extends CCLayer {
         monsterAnimations.addFrame("alien_left_3.png");
         monsterAnimations.addFrame("alien_left_4.png");
 
-        bar_gold = CCSprite.sprite("bar_goldcoin.png");
-        bar_gold = CCSprite.sprite("bar_silvercoin.png");
-        
         CCIntervalAction monsterAnimation = CCAnimate.action(monsterAnimations, true);
 
 		addChild(monsterSprite);
@@ -294,10 +294,8 @@ public abstract class StageLayer extends CCLayer {
 				getTouchEvent().getX() 
 					+ (Math.abs(maxPositionXCenter - getPosition().x)),  
 				getContentSize().height - getTouchEvent().getY() 
-					+ (Math.abs(minPositionYCenter - getPosition().y)));
-				
-				
-				
+					- (Math.abs(minPositionYCenter - getPosition().y)));
+		
 				
 	    putDebug("trooper X:" + getTouchEvent().getX() + " Y:" + Float.toString(getContentSize().height - getTouchEvent().getY()));
 				
@@ -625,8 +623,6 @@ public abstract class StageLayer extends CCLayer {
 		}
 
 		changeToNewPosition(event.getX(), event.getY());
-		changeToNewPosition(bar_gold,event.getX(), event.getY());
-		changeToNewPosition(bar_silver,event.getX(), event.getY());
 
 		locationTouchMoveX = event.getX();
 		locationTouchMoveY = event.getY();
@@ -634,44 +630,34 @@ public abstract class StageLayer extends CCLayer {
 		return super.ccTouchesMoved(event);
 	}
 
-	private void changeToNewPosition(float x, float y) {
+	private synchronized void changeToNewPosition(float x, float y) {
 
-		float newPositionX = getPosition().x + (x - locationTouchMoveX)/3f;
-		float newPositionY = getPosition().y + (locationTouchMoveY - y)/3f;
+		float distanceMovedX = (x - locationTouchMoveX)/3f;
+		float distanceMovedY = (locationTouchMoveY - y)/3f;
+		
+		float newPositionX = getPosition().x + distanceMovedX;
+		float newPositionY = getPosition().y + distanceMovedY;
 
 		if (newPositionY < minPositionYCenter) {
 			newPositionY = minPositionYCenter;
+			distanceMovedY = 0;
 		} else if (newPositionY > maxPositionYCenter) {
 			newPositionY = maxPositionYCenter;
+			distanceMovedY = 0;
 		}
 
 		if (newPositionX < minPositionXCenter) {
 			newPositionX = minPositionXCenter;
+			distanceMovedX = 0;
 		} else if (newPositionX > maxPositionXCenter) {
 			newPositionX = maxPositionXCenter;
+			distanceMovedX = 0;
 		}
 
 		setPosition(newPositionX, newPositionY);
-	}
 
-	private void changeToNewPosition(CCSprite sprite, float x, float y) {
-
-		float newPositionX = sprite.getPosition().x + (x - locationTouchMoveX)/3f;
-		float newPositionY = sprite.getPosition().y + (locationTouchMoveY - y)/3f;
-
-		if (newPositionY < minPositionYCenter) {
-			newPositionY = minPositionYCenter;
-		} else if (newPositionY > maxPositionYCenter) {
-			newPositionY = maxPositionYCenter;
-		}
-
-		if (newPositionX < minPositionXCenter) {
-			newPositionX = minPositionXCenter;
-		} else if (newPositionX > maxPositionXCenter) {
-			newPositionX = maxPositionXCenter;
-		}
-
-		sprite.setPosition(newPositionX, newPositionY);
+		bar_gold.setPosition(bar_gold.getPosition().x - distanceMovedX, bar_gold.getPosition().y - distanceMovedY);
+		bar_silver.setPosition(bar_silver.getPosition().x - distanceMovedX, bar_silver.getPosition().y - distanceMovedY);
 	}
 
 }
