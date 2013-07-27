@@ -160,6 +160,9 @@ public abstract class StageLayer extends CCLayer {
         monsterAnimations.addFrame("alien_left_3.png");
         monsterAnimations.addFrame("alien_left_4.png");
 
+        bar_gold = CCSprite.sprite("bar_goldcoin.png");
+        bar_gold = CCSprite.sprite("bar_silvercoin.png");
+        
         CCIntervalAction monsterAnimation = CCAnimate.action(monsterAnimations, true);
 
 		addChild(monsterSprite);
@@ -621,15 +624,27 @@ public abstract class StageLayer extends CCLayer {
 			
 		}
 
-		float newPositionX = getPosition().x + (event.getX() - locationTouchMoveX)/3f;
-		float newPositionY = getPosition().y + (locationTouchMoveY - event.getY())/3f;
-		
+		changeToNewPosition(event.getX(), event.getY());
+		changeToNewPosition(bar_gold,event.getX(), event.getY());
+		changeToNewPosition(bar_silver,event.getX(), event.getY());
+
+		locationTouchMoveX = event.getX();
+		locationTouchMoveY = event.getY();
+
+		return super.ccTouchesMoved(event);
+	}
+
+	private void changeToNewPosition(float x, float y) {
+
+		float newPositionX = getPosition().x + (x - locationTouchMoveX)/3f;
+		float newPositionY = getPosition().y + (locationTouchMoveY - y)/3f;
+
 		if (newPositionY < minPositionYCenter) {
 			newPositionY = minPositionYCenter;
 		} else if (newPositionY > maxPositionYCenter) {
 			newPositionY = maxPositionYCenter;
 		}
-		
+
 		if (newPositionX < minPositionXCenter) {
 			newPositionX = minPositionXCenter;
 		} else if (newPositionX > maxPositionXCenter) {
@@ -637,12 +652,26 @@ public abstract class StageLayer extends CCLayer {
 		}
 
 		setPosition(newPositionX, newPositionY);
-		putDebug("position w:" + getPosition().x + " h:" + getPosition().y);
+	}
 
-		locationTouchMoveX = event.getX();
-		locationTouchMoveY = event.getY();
+	private void changeToNewPosition(CCSprite sprite, float x, float y) {
 
-		return super.ccTouchesMoved(event);
+		float newPositionX = sprite.getPosition().x + (x - locationTouchMoveX)/3f;
+		float newPositionY = sprite.getPosition().y + (locationTouchMoveY - y)/3f;
+
+		if (newPositionY < minPositionYCenter) {
+			newPositionY = minPositionYCenter;
+		} else if (newPositionY > maxPositionYCenter) {
+			newPositionY = maxPositionYCenter;
+		}
+
+		if (newPositionX < minPositionXCenter) {
+			newPositionX = minPositionXCenter;
+		} else if (newPositionX > maxPositionXCenter) {
+			newPositionX = maxPositionXCenter;
+		}
+
+		sprite.setPosition(newPositionX, newPositionY);
 	}
 
 }
