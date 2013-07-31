@@ -11,7 +11,7 @@ import org.cocos2d.types.CGPoint;
  * 
  * @author Nazzaritech Games
  */
-public class Monster {
+public class Monster extends CCSprite {
 
     // vars
     private UUID id;
@@ -21,6 +21,7 @@ public class Monster {
     private float startPositionX;
     private MonsterType monsterType;
     private CCSprite barSprite;
+    private CCSprite barSpriteLife;
     private long hpFull;
     private long hp;
 
@@ -38,7 +39,8 @@ public class Monster {
         this.startPositionY = startPositionY;
         this.id = UUID.randomUUID();
         this.monsterType = monsterType;
-        this.barSprite = CCSprite.sprite(monsterType.getBarName() + "_green.png");
+        this.barSprite = CCSprite.sprite(monsterType.getBarName() + "_red.png");
+        this.barSpriteLife = CCSprite.sprite(monsterType.getBarName() + "_green.png");
         this.hpFull = monsterType.getHp();
         this.hp = monsterType.getHp();
     }
@@ -84,5 +86,9 @@ public class Monster {
 	
 	public CGPoint getPosition() {
 		return CGPoint.ccp(startPositionX, startPositionY);
+	}
+
+	public CCSprite getBarSpriteLife() {
+		return barSpriteLife;
 	}
 }

@@ -1,4 +1,4 @@
-package com.nazzaritech.marsdefence.layer;
+package com.nazzaritech.core.layer;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -6,12 +6,11 @@ import java.util.List;
 import org.cocos2d.actions.base.CCFiniteTimeAction;
 import org.cocos2d.actions.base.CCRepeatForever;
 import org.cocos2d.actions.instant.CCCallFuncN;
-import org.cocos2d.actions.interval.CCAnimate;
+import org.cocos2d.actions.interval.CCDelayTime;
 import org.cocos2d.actions.interval.CCIntervalAction;
 import org.cocos2d.actions.interval.CCMoveTo;
 import org.cocos2d.actions.interval.CCSequence;
 import org.cocos2d.layers.CCLayer;
-import org.cocos2d.nodes.CCAnimation;
 import org.cocos2d.nodes.CCDirector;
 import org.cocos2d.nodes.CCLabel;
 import org.cocos2d.nodes.CCSprite;
@@ -27,15 +26,17 @@ import android.util.SparseArray;
 import android.view.MotionEvent;
 
 import com.nazzaritech.marsdefence.R;
-import com.nazzaritech.marsdefence.utils.ScreemUtil;
+import com.nazzaritech.marsdefence.layer.MenuButtonsGame;
+import com.nazzaritech.marsdefence.scene.GameOverLayer;
+import com.nazzaritech.marsdefence.util.ScreemUtil;
 import com.nazzaritech.marsdefence.vo.Bullet;
 import com.nazzaritech.marsdefence.vo.BulletType;
 import com.nazzaritech.marsdefence.vo.Monster;
 import com.nazzaritech.marsdefence.vo.MonsterType;
-import com.nazzaritech.marsdefence.vo.ScreenObject;
 import com.nazzaritech.marsdefence.vo.TagTypes;
 import com.nazzaritech.marsdefence.vo.Trooper;
 import com.nazzaritech.marsdefence.vo.TrooperType;
+import com.nazzaritech.marsdefence.vo.Wave;
 
 /**
  * Stage Layer
@@ -46,10 +47,16 @@ import com.nazzaritech.marsdefence.vo.TrooperType;
  */
 public abstract class StageLayer extends CCLayer {
 
-	private ArrayList<CCSprite> _monsterList;
-	private ArrayList<CCSprite> _bulletList;
+	// Lista de 'Waves' de monstros
+	private SparseArray<Wave> _waveList;
+	private boolean _isWaveProcessing = false;
+	private List<CCSprite> _monstersWaveList = new ArrayList<CCSprite>();
+
+	// Lista de Pontos que define a ROTA do 
+	private SparseArray<CGPoint> _routes;
+
 	private ArrayList<CCSprite> _trooperList;
-	private ArrayList<CGRect> _roteAreaList;
+
 	private float locationTouchMoveX = 0;
 	private float locationTouchMoveY = 0;
 	private float locationTouchMoveXStart = 0;
@@ -60,9 +67,9 @@ public abstract class StageLayer extends CCLayer {
     Context _context;
 
     // Objetos de Tela
-    protected ScreenObject _goldBar;
-    protected ScreenObject _silverBar;
 
+    protected MenuButtonsGame menuLayer;
+    
 	private float minPositionXCenter = 0;
 	private float maxPositionXCenter = 0;
 		
@@ -87,14 +94,7 @@ public abstract class StageLayer extends CCLayer {
 	private boolean touchHold = false;
 	private boolean actionOn = false;
 	protected MotionEvent touchEvent;
-	
-	protected CCSprite _bt_radio;
 
-	protected CCLabel _ptVidas;
-	protected int _numVidas;
-	protected float _posVidas_X;
-	protected float _posVidas_y;
-	
 	protected boolean isTouchHold(float dt) {
 		if (touchHold && !actionOn) {
 			touchTime+=dt;
@@ -113,13 +113,86 @@ public abstract class StageLayer extends CCLayer {
  	}
 
 	/**
+	 * UPTADE METHOD
+	 * @param dt - TIME
+	 */
+	public void update(float dt) {
+
+		// Verifica Waves
+		// Se for 0, comecou agora!
+		if (!_isWaveProcessing) {
+
+			// TODO Se for ultima wave, processar
+			if (!this.menuLayer.nextWave() ) {
+				CCDirector.sharedDirector().replaceScene(GameOverLayer.scene("Voce venceu! Parabenz!"));
+			}
+
+			_isWaveProcessing = true;
+			_monstersWaveList = new ArrayList<CCSprite>();
+
+			for (int i = 0; i < _waveList.get(this.menuLayer.getWaveAtual()).getListMonster().length; i++) {
+				MonsterType monsterType = _waveList.get(this.menuLayer.getWaveAtual()).getListMonster()[i];
+				float time = _waveList.get(this.menuLayer.getWaveAtual()).getListMonsterTime()[i];
+				addMonster(monsterType, time);
+			}
+		} else {
+
+			// se todos da wave os monstros morreram, inicia wave nova
+			if (_monstersWaveList.isEmpty()) {
+				_isWaveProcessing = false;
+			}
+
+		}
+
+		// To all Troopers validate
+		for (CCSprite trooperSprite : getTrooperList()) {
+			Trooper trooper = (Trooper) trooperSprite.getUserData();
+			
+			// If he cant shoot, 
+			if (!trooper.isShootAlowed()) {
+				trooper.setShootInterval(trooper.getShootInterval() + dt);
+				if (trooper.getShootInterval() > trooper.getTrooperType().getBulletType().getFrequenceShoot()) {
+					trooper.setShootInterval(0.0f);
+					trooper.setShootAlowed(true);
+				}
+			
+			// If he CAN shoot
+			} else {
+				trooper.setShootInterval(0.0f);
+				trooper.setShootAlowed(false);
+
+				for (CCSprite monster : _monstersWaveList) {
+					
+					if (isMonsterOnTrooperRadio(trooperSprite.getPosition(),monster.getPosition())) {
+
+						shootMonster(CGPoint.ccp(trooperSprite.getPosition().x, trooperSprite.getPosition().y)
+								, monster, trooper.getTrooperType().getBulletType());
+
+						break;
+					}
+				}				
+			}
+
+			// set new object data
+			trooperSprite.setUserData(trooper);
+		}
+	}
+
+	/**
 	 * Construtor
 	 * 
 	 * @param color
 	 */
 	protected StageLayer() {
 		super();
+	    this.setIsTouchEnabled(true);
+
 		setContentSize(stageSize());
+
+		// Seta rota do monstro
+		_routes = monsterRote();
+		// seta lista waves
+		_waveList = waves();
 
 		this.minPositionXCenter = - (getContentSize().width - ScreemUtil.widthScreem());
 		this.maxPositionXCenter = 0;
@@ -132,26 +205,14 @@ public abstract class StageLayer extends CCLayer {
 	    background.setVertexZ(1);
 	    addChild(background);
 
-		_goldBar = new ScreenObject();
-		_goldBar.setSprite(CCSprite.sprite("bar_goldcoin.png"));
-	    _goldBar.setStartPosition(CGPoint.ccp(100,ScreemUtil.heightScreem() - 40));
-	    _goldBar.getSprite().setPosition(CGPoint.ccp(100,ScreemUtil.heightScreem() - 40));
-	    _goldBar.getSprite().setVertexZ(1);
-	    addChild(_goldBar.getSprite());
-
-		_silverBar = new ScreenObject();
-		_silverBar.setSprite(CCSprite.sprite("bar_silvercoin.png"));
-	    _silverBar.setStartPosition(CGPoint.ccp(240,ScreemUtil.heightScreem() - 40));
-	    _silverBar.getSprite().setPosition(CGPoint.ccp(240,ScreemUtil.heightScreem() - 40));
-	    _silverBar.getSprite().setVertexZ(1);
-	    addChild(_silverBar.getSprite());
+	    // INICIA MENU LAYER
+	    this.menuLayer = new MenuButtonsGame(20, waves().size());
+	    addChild(this.menuLayer);
 
 		this._context = CCDirector.sharedDirector().getActivity();
 
 		SoundEngine.sharedEngine().preloadEffect(_context, R.raw.tshot);
 		SoundEngine.sharedEngine().preloadEffect(_context, R.raw.teleport);
-		_monsterList = new ArrayList<CCSprite>();
-		_bulletList = new ArrayList<CCSprite>();
 		_trooperList = new ArrayList<CCSprite>();
 		
 		CCTextureCache.sharedTextureCache().addImage("alien_left_1.png");
@@ -160,6 +221,81 @@ public abstract class StageLayer extends CCLayer {
 		CCTextureCache.sharedTextureCache().addImage("alien_left_4.png");
 
 	}
+//
+//	/**
+//	 * Metodo que adiciona um monstro 
+//	 * 
+//	 * @param monsterType   - Tipo do Monstro
+//	 * @param monsterSpeed  - Velocidade do Monstro
+//	 */
+//	protected void addMonsterAnimate(MonsterType monsterType) {
+//		
+//		// Busca rota do monstro
+//		SparseArray<CGPoint> rote = monsterRote();
+//
+//		// Cria um objeto MONSTRO e um ojbeto SPRITE
+//		Monster monster = new Monster(
+//				monsterType, // tipo monstro
+//				rote.get(1).x,  // posicao inicial X
+//				rote.get(1).y); // posicao inicial Y
+//		
+//        // Instancia o 'Sprite' do monstro
+//		CCSprite monsterSprite = CCSprite.sprite(monsterType.getImage());
+//		monsterSprite.setPosition(CGPoint.ccp(rote.get(1).x,rote.get(1).y));
+//		monsterSprite.setTag(TagTypes.TAG_MONSTER);
+//		monsterSprite.setVertexZ(monster.getMonsterType().getzIndex());
+//
+//		// MONSTRO ANIMADO
+//		CCAnimation monsterAnimations = CCAnimation.animation("ALIEN", 2 / 20f);
+//		monsterAnimations.addFrame("alien_left_1.png");
+//        monsterAnimations.addFrame("alien_left_2.png");
+//        monsterAnimations.addFrame("alien_left_3.png");
+//        monsterAnimations.addFrame("alien_left_4.png");
+//
+//        CCIntervalAction monsterAnimation = CCAnimate.action(monsterAnimations, true);
+//
+//		addChild(monsterSprite);
+//		
+//	    // Busca informacoes da rota do monstro
+//		CCFiniteTimeAction firstRote = CCMoveTo.action(monster.getRealSpeed(rote.get(1),rote.get(2)),rote.get(2));
+//		CCFiniteTimeAction[] roteList = new CCFiniteTimeAction[rote.size()-1];
+//		int j = 0;
+//		for (int i = 3; i <= rote.size(); i++) {
+//			roteList[j++] = CCMoveTo.action(monster.getRealSpeed(rote.get(i-1),rote.get(i)), rote.get(i));
+//		}
+//
+//		// Apos rotas, executa metodo de monstros finalizados
+//		roteList[j] = CCCallFuncN.action(this, "monsterPass");
+//
+//		CCRepeatForever.action(CCIntervalAction.action(1f));
+//		// Mover monstro
+//	    CCSequence actions = CCSequence.actions(firstRote, roteList);
+//	    monsterSprite.runAction(CCRepeatForever.action(monsterAnimation));
+//	    monsterSprite.runAction(actions);
+//	    
+//	    // Adiciona barra de vida vida ao monstro
+//		monster.getBarSprite().setPosition(CGPoint.ccp(rote.get(1).x,rote.get(1).y));
+//		monster.getBarSprite().setVertexZ(2);
+//		monster.getBarSprite().setTag(TagTypes.TAG_MONSTER_LIFE);
+//		addChild(monster.getBarSprite());
+//
+//		firstRote = CCMoveTo.action(monster.getRealSpeed(rote.get(1),rote.get(2)),rote.get(2));
+//		roteList = new CCFiniteTimeAction[rote.size()-1];
+//		j = 0;
+//		for (int i = 3; i <= rote.size(); i++) {
+//			roteList[j++] = CCMoveTo.action(monster.getRealSpeed(rote.get(i-1),rote.get(i)), rote.get(i));
+//		}
+//		// Apos rotas, executa metodo de monstros finalizados
+//		roteList[j] = CCCallFuncN.action(this, "monsterLivePass");
+//
+//	    actions = CCSequence.actions(firstRote, roteList);
+//	    monster.getBarSprite().runAction(actions);
+//
+//		// Adiciona monstro na lista
+//		monsterSprite.setUserData(monster);
+//	    _monsterList.add(monsterSprite);
+//
+//	}
 
 	/**
 	 * Metodo que adiciona um monstro 
@@ -167,40 +303,28 @@ public abstract class StageLayer extends CCLayer {
 	 * @param monsterType   - Tipo do Monstro
 	 * @param monsterSpeed  - Velocidade do Monstro
 	 */
-	protected void addMonsterAnimate(MonsterType monsterType) {
-		
-		// Busca rota do monstro
-		SparseArray<CGPoint> rote = monsterRote();
+	protected void addMonster(MonsterType monsterType, float delayTime) {
 
 		// Cria um objeto MONSTRO e um ojbeto SPRITE
 		Monster monster = new Monster(
 				monsterType, // tipo monstro
-				rote.get(1).x,  // posicao inicial X
-				rote.get(1).y); // posicao inicial Y
+				_routes.get(1).x,  // posicao inicial X
+				_routes.get(1).y); // posicao inicial Y
 		
         // Instancia o 'Sprite' do monstro
 		CCSprite monsterSprite = CCSprite.sprite(monsterType.getImage());
-		monsterSprite.setPosition(CGPoint.ccp(rote.get(1).x,rote.get(1).y));
+		monsterSprite.setPosition(CGPoint.ccp(_routes.get(1).x,_routes.get(1).y));
 		monsterSprite.setTag(TagTypes.TAG_MONSTER);
 		monsterSprite.setVertexZ(monster.getMonsterType().getzIndex());
-
+		
 		// MONSTRO ANIMADO
-		CCAnimation monsterAnimations = CCAnimation.animation("ALIEN", 2 / 20f);
-		monsterAnimations.addFrame("alien_left_1.png");
-        monsterAnimations.addFrame("alien_left_2.png");
-        monsterAnimations.addFrame("alien_left_3.png");
-        monsterAnimations.addFrame("alien_left_4.png");
-
-        CCIntervalAction monsterAnimation = CCAnimate.action(monsterAnimations, true);
-
 		addChild(monsterSprite);
 		
 	    // Busca informacoes da rota do monstro
-		CCFiniteTimeAction firstRote = CCMoveTo.action(monster.getRealSpeed(rote.get(1),rote.get(2)),rote.get(2));
-		CCFiniteTimeAction[] roteList = new CCFiniteTimeAction[rote.size()-1];
+		CCFiniteTimeAction[] roteList = new CCFiniteTimeAction[_routes.size() ];
 		int j = 0;
-		for (int i = 3; i <= rote.size(); i++) {
-			roteList[j++] = CCMoveTo.action(monster.getRealSpeed(rote.get(i-1),rote.get(i)), rote.get(i));
+		for (int i = 2; i <= _routes.size(); i++) {
+			roteList[j++] = CCMoveTo.action(monster.getRealSpeed(_routes.get(i-1),_routes.get(i)), _routes.get(i));
 		}
 
 		// Apos rotas, executa metodo de monstros finalizados
@@ -208,101 +332,40 @@ public abstract class StageLayer extends CCLayer {
 
 		CCRepeatForever.action(CCIntervalAction.action(1f));
 		// Mover monstro
-	    CCSequence actions = CCSequence.actions(firstRote, roteList);
-	    monsterSprite.runAction(CCRepeatForever.action(monsterAnimation));
+	    CCSequence actions = CCSequence.actions(CCDelayTime.action(delayTime), roteList);
+
 	    monsterSprite.runAction(actions);
 	    
-	    // Adiciona barra de vida vida ao monstro
-		monster.getBarSprite().setPosition(CGPoint.ccp(rote.get(1).x,rote.get(1).y));
-		monster.getBarSprite().setVertexZ(2);
-		monster.getBarSprite().setTag(TagTypes.TAG_MONSTER_LIFE);
-		addChild(monster.getBarSprite());
-
-		firstRote = CCMoveTo.action(monster.getRealSpeed(rote.get(1),rote.get(2)),rote.get(2));
-		roteList = new CCFiniteTimeAction[rote.size()-1];
-		j = 0;
-		for (int i = 3; i <= rote.size(); i++) {
-			roteList[j++] = CCMoveTo.action(monster.getRealSpeed(rote.get(i-1),rote.get(i)), rote.get(i));
-		}
-		// Apos rotas, executa metodo de monstros finalizados
-		roteList[j] = CCCallFuncN.action(this, "monsterLivePass");
-
-	    actions = CCSequence.actions(firstRote, roteList);
-	    monster.getBarSprite().runAction(actions);
+	    moveLifeBar(monster.getBarSpriteLife(), monster, delayTime);
 
 		// Adiciona monstro na lista
 		monsterSprite.setUserData(monster);
-	    _monsterList.add(monsterSprite);
+		_monstersWaveList.add(monsterSprite);
 
 	}
 
-	/**
-	 * Metodo que adiciona um monstro 
-	 * 
-	 * @param monsterType   - Tipo do Monstro
-	 * @param monsterSpeed  - Velocidade do Monstro
-	 */
-	protected void addMonster(MonsterType monsterType) {
-		
-		// Busca rota do monstro
-		SparseArray<CGPoint> rote = monsterRote();
+	private void moveLifeBar(CCSprite barSprite, Monster monster, float delayTime) {
+	    // Adiciona barra de vida vida ao monstro
+		barSprite.setPosition(CGPoint.ccp(_routes.get(1).x,_routes.get(1).y));
+		barSprite.setVertexZ(2);
+		barSprite.setTag(TagTypes.TAG_MONSTER_LIFE);
+		addChild(barSprite);
 
-		// Cria um objeto MONSTRO e um ojbeto SPRITE
-		Monster monster = new Monster(
-				monsterType, // tipo monstro
-				rote.get(1).x,  // posicao inicial X
-				rote.get(1).y); // posicao inicial Y
-		
-        // Instancia o 'Sprite' do monstro
-		CCSprite monsterSprite = CCSprite.sprite(monsterType.getImage());
-		monsterSprite.setPosition(CGPoint.ccp(rote.get(1).x,rote.get(1).y));
-		monsterSprite.setTag(TagTypes.TAG_MONSTER);
-		monsterSprite.setVertexZ(monster.getMonsterType().getzIndex());
-
-		// MONSTRO ANIMADO
-
-		addChild(monsterSprite);
-		
 	    // Busca informacoes da rota do monstro
-		CCFiniteTimeAction firstRote = CCMoveTo.action(monster.getRealSpeed(rote.get(1),rote.get(2)),rote.get(2));
-		CCFiniteTimeAction[] roteList = new CCFiniteTimeAction[rote.size()-1];
+		CCFiniteTimeAction[] roteList = new CCFiniteTimeAction[_routes.size()];
 		int j = 0;
-		for (int i = 3; i <= rote.size(); i++) {
-			roteList[j++] = CCMoveTo.action(monster.getRealSpeed(rote.get(i-1),rote.get(i)), rote.get(i));
+		for (int i = 2; i <= _routes.size(); i++) {
+			roteList[j++] = CCMoveTo.action(monster.getRealSpeed(_routes.get(i-1),_routes.get(i)), _routes.get(i));
 		}
 
 		// Apos rotas, executa metodo de monstros finalizados
-		roteList[j] = CCCallFuncN.action(this, "monsterPass");
+		roteList[j] = CCCallFuncN.action(this, "monsterLivebarPass");
 
-		CCRepeatForever.action(CCIntervalAction.action(1f));
-		// Mover monstro
-	    CCSequence actions = CCSequence.actions(firstRote, roteList);
-	    monsterSprite.runAction(actions);
-	    
-	    // Adiciona barra de vida vida ao monstro
-		monster.getBarSprite().setPosition(CGPoint.ccp(rote.get(1).x,rote.get(1).y));
-		monster.getBarSprite().setVertexZ(2);
-		monster.getBarSprite().setTag(TagTypes.TAG_MONSTER_LIFE);
-		addChild(monster.getBarSprite());
+	    CCSequence actions = CCSequence.actions(CCDelayTime.action(delayTime), roteList);
 
-		firstRote = CCMoveTo.action(monster.getRealSpeed(rote.get(1),rote.get(2)),rote.get(2));
-		roteList = new CCFiniteTimeAction[rote.size()-1];
-		j = 0;
-		for (int i = 3; i <= rote.size(); i++) {
-			roteList[j++] = CCMoveTo.action(monster.getRealSpeed(rote.get(i-1),rote.get(i)), rote.get(i));
-		}
-		// Apos rotas, executa metodo de monstros finalizados
-		roteList[j] = CCCallFuncN.action(this, "monsterLivePass");
-
-	    actions = CCSequence.actions(firstRote, roteList);
-	    monster.getBarSprite().runAction(actions);
-
-		// Adiciona monstro na lista
-		monsterSprite.setUserData(monster);
-	    _monsterList.add(monsterSprite);
-
+	    barSprite.runAction(actions);
 	}
-
+	
 	/**
 	 * Add new Trooper
 	 * 
@@ -362,7 +425,6 @@ public abstract class StageLayer extends CCLayer {
 	    bulletSprite.setVertexZ(5);
 	    
 	    addChild(bulletSprite);
-	    _bulletList.add(bulletSprite);
 	    SoundEngine.sharedEngine().playEffect(_context, R.raw.tshot);
 
 	    // Choose one of the touches to work with
@@ -392,26 +454,26 @@ public abstract class StageLayer extends CCLayer {
 		// SE O MONSTRO NAO MORREU
 		} else {
 			
-			float widthAntigo = monster.getBarSprite().getContentSize().width;
-			float widthNovo = monster.getBarSprite().getContentSize().width * percentualVida;
+			float widthAntigo = monster.getBarSpriteLife().getContentSize().width;
+			float widthNovo = monster.getBarSpriteLife().getContentSize().width * percentualVida;
 			float widthRemovido = widthAntigo - widthNovo;
 			
 			CGRect newRect = CGRect.make(0, 0, 
 					widthNovo,
-					monster.getBarSprite().getContentSize().height);
+					monster.getBarSpriteLife().getContentSize().height);
 			
 			// diminui tamanho da barra
 			
 			if (percentualVida <= 0.80f) {
-				monster.getBarSprite().setTexture(
+				monster.getBarSpriteLife().setTexture(
 						CCTextureCache.sharedTextureCache().addImage(
 								monster.getMonsterType().getBarName() + "_red.png"));
 			}
 
-			monster.getBarSprite().setTextureRect(newRect);
-			monster.getBarSprite().setPosition(
-					monster.getBarSprite().getPosition().x - widthRemovido, 
-					monster.getBarSprite().getPosition().y);
+			monster.getBarSpriteLife().setTextureRect(newRect);
+			monster.getBarSpriteLife().setPosition(
+					monster.getBarSpriteLife().getPosition().x - widthRemovido, 
+					monster.getBarSpriteLife().getPosition().y);
 			
 		}
 		monsterSprite.setUserData(monster);
@@ -430,14 +492,12 @@ public abstract class StageLayer extends CCLayer {
 	}
 
 	protected void removeMonster(CCSprite monster) {
-		getMonsterList().remove(monster);
-		removeChild(((Monster)monster.getUserData()).getBarSprite(), true);
+		removeChild(((Monster)monster.getUserData()).getBarSpriteLife(), true);
 		removeChild(monster, true);
-		monster = null;
+		_monstersWaveList.remove(monster);
 	}
 
 	protected void removeBullet(CCSprite bullet) {
-		getBulletList().remove(bullet);
 		removeChild(bullet, true);
 	}
 
@@ -455,7 +515,11 @@ public abstract class StageLayer extends CCLayer {
 	 * 
 	 * @param sender - Monster obj
 	 */
-	public abstract void monsterLivePass(Object sender);
+	public void monsterLivebarPass(Object sender) {
+	    CCSprite barSprite = (CCSprite) sender;
+	    removeChild(barSprite, true);
+		
+	}
 
 	/**
 	 * bulletHitMonster
@@ -507,77 +571,15 @@ public abstract class StageLayer extends CCLayer {
 		}
 	}
 	
-	protected List<CCSprite> getMonsterList() {
-		return _monsterList;
-	}
-	
-	protected List<CCSprite> getBulletList() {
-		return _bulletList;
-	}
-	
 	protected List<CCSprite> getTrooperList() {
 		return _trooperList;
 	}
-
-	private boolean isTrooperOutsideRote(CGPoint trooperPoint) {
-		if (_roteAreaList == null) {
-			_roteAreaList = new ArrayList<CGRect>();
-			
-			SparseArray<CGPoint> roteList = monsterRote();
-
-			for (int i = 1; i <= roteList.size(); i++) {
-				
-				
-				// Ponto um
-				
-				// Ponto dois 
-				
-				
-//				CGRect rectangle = CGRect.make(roteList.get(i).x, CGSize.make(roteList.get(i+1).x, roteList.get(i+1).y));
-
-				
-//				_roteAreaList.add(CGRect.);
-				
-//				array_type array_element = array[i];
-				
-			}
-			
-		}
-		
-		monsterRote();
-		
-		
-		
-		
-		return false;
-	}
-	
 	
 	@Override
 	public boolean ccTouchesBegan(MotionEvent event) {
 		this.touchEvent = event;
 		touchTime = 0.0f;
 		touchHold = true;
-	    
-    	// Se clicou em RADIO
-    	if (isInsideArea(_bt_radio, event.getX(), event.getY())) {
-    		actionOn = true;
-    		Integer opacity = null;
-    				
-           	for (CCSprite trooperSprite : _trooperList) {
-           		Trooper trooper = (Trooper) trooperSprite.getUserData();
-           		if (opacity == null) {
-           			opacity = trooper.radioSprite.getOpacity();
-           		}
-
-           		if (opacity == 0) {
-           			trooper.radioSprite.setOpacity(255);
-           		} else {
-           			trooper.radioSprite.setOpacity(0);
-           		}
-			}
-    	}
-
 	    return true;
 	}
 
@@ -668,57 +670,45 @@ public abstract class StageLayer extends CCLayer {
 	}
 
 	private void changeToNewPositionScreen(float x, float y) {
-		
+
+		// Distancia movida
 		float distanceMovedX = (x - locationTouchMoveX)/3f;
 		float distanceMovedY = (locationTouchMoveY - y)/3f;
-		
+
+		// Nova posicao da tela
 		float newPositionX = getPosition().x + distanceMovedX;
 		float newPositionY = getPosition().y + distanceMovedY;
 
-		changeToNewPosition(_goldBar,x, y,newPositionX, newPositionY);
-		changeToNewPosition(_silverBar,x, y,newPositionX, newPositionY);
+		// Nova posição do menu
+		float newPositionMenuX = this.menuLayer.getPosition().x - distanceMovedX;
+		float newPositionMenuY = this.menuLayer.getPosition().y - distanceMovedY;
 
+		// Se a posicao Y ultrapassar o tamanho da tela, setar tamanho como limite
 		if (newPositionY < minPositionYCenter) {
 			newPositionY = minPositionYCenter;
+			newPositionMenuY = this.menuLayer.getStartPosition().y - minPositionYCenter;
 		} else if (newPositionY > maxPositionYCenter) {
 			newPositionY = maxPositionYCenter;
+			newPositionMenuY = this.menuLayer.getStartPosition().y;
 		}
 
+		// Se a posicao X ultrapassar o tamanho da tela, setar tamanho como limite
 		if (newPositionX < minPositionXCenter) {
 			newPositionX = minPositionXCenter;
+			newPositionMenuX = this.menuLayer.getStartPosition().x - minPositionXCenter;
 		} else if (newPositionX > maxPositionXCenter) {
 			newPositionX = maxPositionXCenter;
+			newPositionMenuX = this.menuLayer.getStartPosition().x;
 		}
-
-		setPosition(newPositionX, newPositionY);
+		
+		// Seta novas posicoes
+		this.menuLayer.setPosition(newPositionMenuX, newPositionMenuY);
+		this.setPosition(newPositionX, newPositionY);
 
 	}
 
-	private void changeToNewPosition(ScreenObject screenObject, float x, float y, 
-			float newPositionX, float newPositionY) {
-		
-		float distanceMovedX = (x - locationTouchMoveX)/3f;
-		float distanceMovedY = (locationTouchMoveY - y)/3f;
-		
-		float newPositionXScreen = screenObject.getSprite().getPosition().x - distanceMovedX;
-		float newPositionYScreen = screenObject.getSprite().getPosition().y - distanceMovedY;
+	protected abstract SparseArray<Wave> waves();
 
-		if (newPositionY < minPositionYCenter) {
-			newPositionYScreen = screenObject.getStartPosition().y - minPositionYCenter;
-		} else if (newPositionY > maxPositionYCenter) {
-			newPositionYScreen = screenObject.getStartPosition().y;
-		}
-
-		if (newPositionX < minPositionXCenter) {
-			newPositionXScreen = screenObject.getStartPosition().x - minPositionXCenter;
-		} else if (newPositionX > maxPositionXCenter) {
-			newPositionXScreen = screenObject.getStartPosition().x;
-		}
-
-		screenObject.getSprite().setPosition(newPositionXScreen, newPositionYScreen);
-
-	}
-	
 	protected abstract CGSize stageSize();
 
 	protected abstract String stageBackgrounImage();

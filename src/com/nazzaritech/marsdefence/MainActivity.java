@@ -9,8 +9,8 @@ import android.os.Bundle;
 import android.view.Window;
 import android.view.WindowManager;
 
-import com.nazzaritech.marsdefence.layer.InitialLayer;
-import com.nazzaritech.marsdefence.layer.MenuLayer;
+import com.nazzaritech.marsdefence.scene.InitialScene;
+import com.nazzaritech.marsdefence.scene.MenuScene;
 import com.nazzaritech.marsdefence.vo.SceneTag;
 
 public class MainActivity extends Activity {
@@ -39,7 +39,7 @@ public class MainActivity extends Activity {
         CCDirector.sharedDirector().setDisplayFPS(true);
         CCDirector.sharedDirector().setAnimationInterval(1.0f / 60.0f);
 
-        CCScene scene = InitialLayer.scene();
+        CCScene scene = InitialScene.scene();
         CCDirector.sharedDirector().runWithScene(scene);
     }
 
@@ -74,7 +74,7 @@ public class MainActivity extends Activity {
     		scene.cleanup();
     		scene.removeSelf();
     		// go to menu
-    		scene = MenuLayer.scene();
+    		scene = MenuScene.scene();
             CCDirector.sharedDirector().replaceScene(scene);
     	}
 

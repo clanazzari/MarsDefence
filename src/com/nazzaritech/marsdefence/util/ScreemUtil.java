@@ -1,4 +1,4 @@
-package com.nazzaritech.marsdefence.utils;
+package com.nazzaritech.marsdefence.util;
 
 import java.util.Random;
 

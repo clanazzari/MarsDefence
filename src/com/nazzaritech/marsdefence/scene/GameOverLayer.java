@@ -1,4 +1,4 @@
-package com.nazzaritech.marsdefence.layer;
+package com.nazzaritech.marsdefence.scene;
 
 import org.cocos2d.actions.instant.CCCallFunc;
 import org.cocos2d.actions.interval.CCDelayTime;
@@ -10,6 +10,7 @@ import org.cocos2d.nodes.CCLabel;
 import org.cocos2d.types.CGSize;
 import org.cocos2d.types.ccColor3B;
 import org.cocos2d.types.ccColor4B;
+
 
 import android.view.MotionEvent;
 
